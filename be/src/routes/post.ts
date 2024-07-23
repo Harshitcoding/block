@@ -98,48 +98,32 @@ postRouter.get('/post/:id', async (c) => {
 
   return c.json({ post });
 });
-
-
-postRouter.delete('/delete', async (c) => {
-  // Authorization check can be reused from existing middleware
-  const authHeader = c.req.header("authorization") || "";
-  const user = await verify(authHeader, c.env.JWT_SECRET);
-
-  if (!user) {
-    c.status(401); // Unauthorized
-    return c.json({ msg: "Authorization required" });
-  }
-
+postRouter.delete('/posts/delete-all', async (c) => {
   const prisma = new PrismaClient({
     datasourceUrl: c.env.DATABASE_URL,
   }).$extends(withAccelerate());
 
-  // Delete all posts (consider adding confirmation prompt for safety)
-  await prisma.post.deleteMany({});
+  try {
+    // Delete all comments
+    const deletedComments = await prisma.comment.deleteMany();
 
-  // Respond with success message
-  return c.json({ msg: "All posts deleted successfully" });
-});
+    // Delete all posts
+    const deletedPosts = await prisma.post.deleteMany();
 
-postRouter.get('/name/:id', async (c) => {
-  const prisma = new PrismaClient({
-    datasourceUrl: c.env.DATABASE_URL,
-  }).$extends(withAccelerate());
-
-  const id = parseInt(c.req.param('id'), 10);
-
-  const user = await prisma.user.findUnique({
-    where: { id }, // Filter by ID
-    select: { name: true }, // Only retrieve the "name" field
-  });
-
-  if (!user) {
-    return c.status(404)
+    return c.json({
+      msg: "All posts and comments deleted successfully",
+      deletedComments: deletedComments.count,
+      deletedPosts: deletedPosts.count,
+    });
+  } catch (error) {
+    console.error("Error deleting posts and comments:", error);
+    c.status(500);
+    return c.json({
+      msg: "An error occurred while deleting posts and comments",
+      error: error.message,
+    });
   }
-
-  return c.json({ name: user.name }); 
 });
-
 
 postRouter.post('/post/:postId/comment', async (c) => {
   const prisma = new PrismaClient({
